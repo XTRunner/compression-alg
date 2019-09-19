@@ -1,6 +1,3 @@
-import numpy as np
-import typing
-import mypy
 from typing import Any, List, Dict, Union, Optional
 from simplification.cutil import simplify_coords_vw
 import time
