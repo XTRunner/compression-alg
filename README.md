@@ -1,4 +1,7 @@
 # compression-alg
 
-Three popular compression algorithms, i.e., Ramer–Douglas–Peucker Algorithm, Visvalingam-Whyatt Algorithm and Optimal Algorithm, are implemented in Python 3.
+Python 3 Implementation of widely-used compression methodologies
 
+Current available algorithm: Ramer–Douglas–Peucker Algorithm, Visvalingam-Whyatt Algorithm, Optimal Algorithm.
+
+Details of the algorithms can be found: 
