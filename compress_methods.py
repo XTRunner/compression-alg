@@ -1,14 +1,17 @@
 from typing import Any, List, Dict, Union, Optional
 from simplification.cutil import simplify_coords_vw
 import time
+import numpy as np
+import math
+from tslearn.piecewise import OneD_SymbolicAggregateApproximation as sax
 
 
-def sq_seg_dist(p1: int, pi: int, p2: int, i: int, first: int, last: int) -> float:
+def sq_seg_dist(p1: float, pi: float, p2: float, i: int, first: int, last: int) -> float:
     """
     Square vertical distance between point and a segment
     """
     dx, dy = last - first, p2 - p1
-
+    
     if not dx:
         ### dy == 0 because of time series data
         return (pi - p1) ** 2
@@ -18,10 +21,70 @@ def sq_seg_dist(p1: int, pi: int, p2: int, i: int, first: int, last: int) -> flo
 
 
 class compress:
-    def __init__(self, points):
+    def __init__(self, points: List[float]):
         self.points = points
 
-    def modify_dp(self, tolerance: int) -> List[int]:
+    def dft(self, ratio: float) -> List[float]:
+        start = time.time()
+        l = math.floor(len(self.points) * ratio)
+
+        markers = [1 for _ in range(len(self.points))]
+
+        fts = np.fft.fft(self.points)
+
+        while sum([1 if val else 0 for val in markers]) > l:
+            min_square, min_idx = float("inf"), -1
+            for idx in range(len(self.points)):
+                if markers[idx] and fts[idx].real **2 + fts[idx].imag **2 < min_square:
+                    min_idx, min_square = idx, fts[idx].real **2 + fts[idx].imag **2
+
+            markers[min_idx] = None
+
+        fts_0 = [fts[idx] if val else 0+0.j for idx, val in enumerate(markers)]
+
+        c_points = np.fft.ifft(fts_0)
+
+        stop = time.time()
+
+        c_points = [val.real for val in c_points]
+
+        return c_points
+
+    def one_d_sax(self, ratio: float, avg_size: int, slope_size: int) -> List[float]:
+        start = time.time()
+
+        # Each window needs two variable to represent: slope and avg
+        l = math.floor(len(self.points) * ratio)//2
+
+        sax_tool = sax(n_segments=l, alphabet_size_avg=avg_size, alphabet_size_slope=slope_size)
+
+        res_sax = sax_tool.fit_transform([self.points])
+
+        stop = time.time()
+
+        c_points = sax_tool.inverse_transform(res_sax)
+
+        return c_points.flatten().tolist()
+
+    def paa(self, ratio: float) -> List[float]:
+        start = time.time()
+
+        window_num = math.floor(len(self.points) * ratio)
+
+        window_size = math.ceil(len(self.points)/window_num)
+
+        c_points, idx = [0 for __ in self.points], 0
+
+        while idx + window_size <= len(self.points):
+            c_points[idx:idx+window_size] = [sum(self.points[idx:idx+window_size])/window_size] * window_size
+            idx += window_size
+
+        if idx <= len(self.points) - 1:
+            c_points[idx:] = [sum(self.points[idx:]) / len(self.points[idx:])] * len(self.points[idx:])
+
+        return c_points
+
+    def modify_dp(self, tolerance: int) -> List[float]:
         start = time.time()
 
         markers = [0 for _ in range(len(self.points))]
@@ -60,7 +123,7 @@ class compress:
 
         return c_points
 
-    def modify_vw(self, tolerance: int) -> List[int]:
+    def modify_vw(self, tolerance: int) -> List[float]:
         start = time.time()
         list_param = [[idx, num] for idx, num in enumerate(self.points)]
         c_res = simplify_coords_vw(list_param, tolerance)
@@ -133,14 +196,15 @@ class compress:
 
         return marker
 
-
-    def modify_opt(self, tolerance: int) -> List[int]:
+    def modify_opt(self, tolerance: int) -> List[float]:
         start = time.time()
         c_marker = None
         for i in range(len(self.points)):
             marker = self.circleALG(i, tolerance)
             if (not c_marker) or sum(marker) < sum(c_marker):
                 c_marker = marker
+
+        stop = time.time()
 
         c_points = [self.points[i] if c_marker[i] else None for i in range(len(c_marker))]
 
